@@ -1,0 +1,53 @@
+name: Verify Solana six-block extraction
+on:
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      SUBSTREAMS_API_TOKEN: ${{ secrets.SUBSTREAMS_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Require provider authentication
+        run: |
+          if [ -z "$SUBSTREAMS_API_TOKEN" ]; then
+            echo "::error::Missing SUBSTREAMS_API_TOKEN repository secret. Add a token from a Solana Substreams provider."
+            exit 1
+          fi
+      - name: Compile
+        run: cargo build --release --target wasm32-unknown-unknown
+      - name: Install CLI
+        run: |
+          curl -fLsS --retry 3 -o /tmp/substreams.tar.gz https://github.com/streamingfast/substreams/releases/download/v1.27.0/substreams_linux_x86_64.tar.gz
+          tar -xzf /tmp/substreams.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/substreams /usr/local/bin/substreams
+      - name: Stream inclusive range 385870151..385870156
+        run: |
+          substreams run -e mainnet.sol.streamingfast.io:443 substreams.yaml map_transfers -s 385870151 -t 385870157 -o jsonl > raw-output.jsonl
+          test -s raw-output.jsonl
+      - name: Validate JSON transfer records
+        run: |
+          python3 scripts/export_jsonl.py raw-output.jsonl transfers.jsonl
+          python3 - <<'PY'
+          import json
+          count = 0
+          with open("transfers.jsonl", encoding="utf-8") as source:
+              for line in source:
+                  value = json.loads(line)
+                  assert set(value) == {"from", "to", "amount"}
+                  assert all(isinstance(value[k], str) and value[k] for k in ("from", "to"))
+                  assert type(value["amount"]) is int and 0 <= value["amount"] <= 2**64 - 1
+                  count += 1
+          assert count > 0, "No transfer records extracted"
+          print(f"Validated {count} transfer records")
+          PY
+      - name: Upload verified six-block output
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-solana-transfers-385870151-385870156
+          path: |
+            raw-output.jsonl
+            transfers.jsonl
