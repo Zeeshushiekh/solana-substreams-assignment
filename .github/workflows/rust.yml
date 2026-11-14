@@ -1,0 +1,21 @@
+name: Rust checks and WASM build
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Unit tests
+        run: cargo test --locked || cargo test
+      - name: Build WebAssembly
+        run: cargo build --release --target wasm32-unknown-unknown
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solana-transfer-wasm
+          path: target/wasm32-unknown-unknown/release/solana_transfer_extractor.wasm
