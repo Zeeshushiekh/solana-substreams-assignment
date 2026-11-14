@@ -20,7 +20,7 @@ jobs:
           curl --fail --location --retry 3 -o /tmp/substreams.tar.gz https://github.com/streamingfast/substreams/releases/download/v1.27.0/substreams_linux_x86_64.tar.gz
           tar -xzf /tmp/substreams.tar.gz -C /tmp
           sudo install -m 0755 /tmp/substreams /usr/local/bin/substreams
-          substreams version
+          substreams --version
       - name: Package SPKG
         run: |
           substreams pack substreams.yaml
